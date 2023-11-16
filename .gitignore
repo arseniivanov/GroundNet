@@ -152,5 +152,5 @@ cython_debug/
 #.idea/
 
 
-book_annotation_train
-book_annotation_test
+book_annotation_train/
+book_annotation_test/
