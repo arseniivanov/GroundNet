@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 # Standard Convolutional Layer
 class ConvLayer(nn.Module):
@@ -66,9 +67,16 @@ class MCUnetBackbone(nn.Module):
         # Depthwise Separable Convolution Layer 4
         self.layers.append(DepthwiseConvLayer(in_channels=48, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True))
 
-        self.final_dense = nn.Linear(in_features=4560, out_features=3)  # Adjust the in_features according to your specific flattened size
+        self.camera_branch = nn.Sequential(
+            nn.Linear(25, 128),
+            nn.LeakyReLU(negative_slope=0.01),  # small negative slope
+            nn.Linear(128, 256),
+            nn.LeakyReLU(negative_slope=0.01)
+        )
 
-    def forward(self, x):
+        self.final_dense = nn.Linear(in_features=55616 + 256, out_features=3)  # Adjust the in_features accordingly
+
+    def forward(self, x, camera_data):
         # Process the initial layers
 
         for layer in self.layers[:-2]:  # This will exclude the last three layers intended for skip connection
@@ -85,9 +93,11 @@ class MCUnetBackbone(nn.Module):
         # Apply the skip connection
         x = x + skip_conn
 
-        x = x.view(x.size(0), -1)
+        camera_features = self.camera_branch(camera_data)
 
-        x = self.final_dense(x)
+        combined_features = torch.cat([x.reshape(x.size(0), -1), camera_features], dim=1)
+
+        x = self.final_dense(combined_features)
 
         return x
     
