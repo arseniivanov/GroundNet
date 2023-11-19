@@ -9,6 +9,24 @@ import cv2
 import torch
 
 from objectron.annotation_data_pb2 import Sequence
+from architectures import MCUnetBackbone
+
+def adjust_and_normalize_intrinsics(intrinsics, original_width, original_height, new_width, new_height):
+    scale_x = new_width / original_width
+    scale_y = new_height / original_height
+
+    fx, fy, cx, cy = intrinsics[0], intrinsics[4], intrinsics[2], intrinsics[5]
+
+    # Adjust for the new image size
+    fx_adj = fx * scale_x
+    fy_adj = fy * scale_y
+    cx_adj = cx * scale_x
+    cy_adj = cy * scale_y
+
+    return [fx_adj, fy_adj, cx_adj, cy_adj]
+
+# Example usage
+intrinsics = [1596.7095947265625, 0.0, 934.6396484375, 0.0, 1596.7095947265625, 715.7233276367188, 0.0, 0.0, 1.0]
 
 def read_video(filename):
     """
@@ -24,7 +42,8 @@ def read_video(filename):
     
     frames = []
     f = 0
-    target_size = (640, 360)  # Desired output size (width, height)
+
+    new_width, new_height = 320, 240
 
     while True and f < 100: 
         ret, frame = cap.read()
@@ -32,7 +51,7 @@ def read_video(filename):
             break
 
         # Resize the frame
-        frame = cv2.resize(frame, target_size)
+        frame = cv2.resize(frame, (new_width, new_height))
         # Convert the frame from BGR (OpenCV default) to RGB
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         # Normalize pixel values to the range 0-1
@@ -56,16 +75,21 @@ def get_frame_annotation(annotation_filename):
     """Grab annotated frames from the sequence and return camera info and normals."""
     caminfo = []
     normals = []
+    original_width, original_height = 1920, 1440
+    new_width, new_height = 320, 240
 
     with open(annotation_filename, 'rb') as pb:
         sequence = Sequence()
         sequence.ParseFromString(pb.read())
-        
+
         for data in sequence.frame_annotations:
             # Concatenate transform and intrinsics into a single 1D array for each frame
+
             transform = np.array(data.camera.transform).flatten()
-            intrinsic = np.array(data.camera.intrinsics).flatten()
-            combined_info = np.concatenate([transform, intrinsic])
+            intrinsics = np.array(data.camera.intrinsics).flatten()
+            rescaled_intrinsics = adjust_and_normalize_intrinsics(intrinsics, original_width, original_height, new_width, new_height)
+
+            combined_info = np.concatenate([transform, rescaled_intrinsics])
             caminfo.append(combined_info)
             
             # Extract the normal vector
@@ -129,7 +153,8 @@ class BookAnnotationsDataset(Dataset):
 
     def _get_data_files(self):
         # Retrieve the list of video files in the dataset directory
-        files = [f for f in os.listdir(self.dataset_dir) if f.endswith('_video.MOV')]
+        files = [f for f in os.listdir(self.dataset_dir) if f.endswith('_video.MOV')][:100]
+        print(len(files))
         return files
 
     def __len__(self):
@@ -149,6 +174,10 @@ class BookAnnotationsDataset(Dataset):
 
         caminfo = caminfo[:100]
         normals = normals[:100]
+
+        if len(normals[2]) != 3:
+            print(video_path)
+            exit()
 
         # Check for length mismatch between video frames and annotation data
         if video_tensor.shape[0] != len(normals):
@@ -176,3 +205,22 @@ def load_data(validation_split=0.2):
     test_dataset = BookAnnotationsDataset('book_annotations_test')
 
     return train_dataset, val_dataset, test_dataset
+
+def load_model(model_path, device):
+    model = MCUnetBackbone().to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
+    return model
+
+def run_predictions(model, data_loader, device):
+    with torch.no_grad():
+        for batch in data_loader:
+            images, camera_data, plane_normals = batch
+            images, camera_data, plane_normals = images[0].to(device), camera_data[0].to(device), plane_normals[0].to(device)
+
+            # Predict
+            predicted_normals = model(images, camera_data)
+
+            # Compare and print
+            print("Real Normals:", plane_normals.cpu().numpy())
+            print("Predicted Normals:", predicted_normals.cpu().numpy())
