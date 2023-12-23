@@ -1,8 +1,4 @@
 import torch.nn as nn
-import torch
-
-from utils import transform_points_to_world
-
 # Standard Convolutional Layer
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, bias=False):
@@ -68,20 +64,12 @@ class MCUnetBackbone(nn.Module):
 
         # Depthwise Separable Convolution Layer 4
         self.layers.append(DepthwiseConvLayer(in_channels=48, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True))
+        
+        self.max_pool = nn.MaxPool2d(2)
 
-        self.camera_branch = nn.Sequential(
-            nn.Linear(20, 64),
-            nn.LeakyReLU(negative_slope=0.01),  # small negative slope
-            nn.Linear(64, 128),
-            nn.LeakyReLU(negative_slope=0.01)
-        )
+        self.final_conv = nn.Conv2d(in_channels=16, out_channels=3, kernel_size=1)
 
-        self.final_dense = nn.Linear(in_features=18224, out_features=6)  # Adjust the in_features accordingly
-
-        self.transform = transform_points_to_world
-
-
-    def forward(self, x, camera_data):
+    def forward(self, x):
         # Process the initial layers
 
         for layer in self.layers[:-2]:  # This will exclude the last three layers intended for skip connection
@@ -98,15 +86,10 @@ class MCUnetBackbone(nn.Module):
         # Apply the skip connection
         x = x + skip_conn
 
-        #Add more convs to reduce dimensionality    
+        #Add more convs to reduce dimensionality      
 
-        camera_features = self.camera_branch(camera_data)
+        x = self.max_pool(x)
+        x = self.final_conv(x)
 
-        combined_features = torch.cat([x.reshape(x.size(0), -1), camera_features], dim=1)
-        point_predictions = self.final_dense(combined_features)
-
-        # Transform point predictions to normals
-        normals = self.transform(point_predictions, camera_data)
-
-        return normals
+        return x
     

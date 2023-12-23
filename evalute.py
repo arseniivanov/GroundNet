@@ -5,6 +5,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 
+from utils import transform_points_to_world, extract_points_from_heatmaps
+
+
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Instantiate the model
@@ -62,7 +65,11 @@ def main():
                 optimizer.zero_grad()
 
                 # Forward pass
-                predicted_normals = model(images, camera_data)
+                heatmaps = model(images)
+
+                # Transform point predictions to normals
+                point_predictions = extract_points_from_heatmaps(heatmaps)
+                predicted_normals = transform_points_to_world(point_predictions, camera_data)
 
                 # Compute loss
                 loss = custom_loss(predicted_normals, plane_normals)
@@ -78,6 +85,7 @@ def main():
                 pbar.update(images.shape[0])
 
             # Validation loop
+            exit() #Need to adjust the val
             model.eval()  # Set the model to evaluation mode
             val_loss = 0.0
             with torch.no_grad():  # No gradients needed for validation
@@ -118,7 +126,6 @@ def main():
             predicted_normals = model(images, camera_data)
 
             # Compute loss
-
             loss = custom_loss(predicted_normals, plane_normals)
 
             # Update test loss

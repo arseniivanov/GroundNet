@@ -85,8 +85,8 @@ def get_frame_annotation(annotation_filename):
         for data in sequence.frame_annotations:
             # Concatenate transform and intrinsics into a single 1D array for each frame
 
-            transform = np.array(data.camera.transform).flatten()
-            intrinsics = np.array(data.camera.intrinsics).flatten()
+            transform = np.array(data.camera.transform)
+            intrinsics = np.array(data.camera.intrinsics)
             rescaled_intrinsics = adjust_and_normalize_intrinsics(intrinsics, original_width, original_height, new_width, new_height)
 
             combined_info = np.concatenate([transform, rescaled_intrinsics])
