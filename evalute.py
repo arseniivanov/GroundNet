@@ -85,7 +85,6 @@ def main():
                 pbar.update(images.shape[0])
 
             # Validation loop
-            exit() #Need to adjust the val
             model.eval()  # Set the model to evaluation mode
             val_loss = 0.0
             with torch.no_grad():  # No gradients needed for validation
@@ -96,8 +95,10 @@ def main():
                     plane_normals = batch[2][0].to(device)
 
                     # Forward pass
-                    predicted_normals = model(images, camera_data)
-
+                    heatmaps = model(images)
+                    point_predictions = extract_points_from_heatmaps(heatmaps)
+                    predicted_normals = transform_points_to_world(point_predictions, camera_data)
+                    
                     # Compute loss
                     loss = custom_loss(predicted_normals, plane_normals)
 
@@ -123,7 +124,9 @@ def main():
             plane_normals = batch[2][0].to(device)
 
             # Forward pass
-            predicted_normals = model(images, camera_data)
+            heatmaps = model(images)
+            point_predictions = extract_points_from_heatmaps(heatmaps)
+            predicted_normals = transform_points_to_world(point_predictions, camera_data)
 
             # Compute loss
             loss = custom_loss(predicted_normals, plane_normals)

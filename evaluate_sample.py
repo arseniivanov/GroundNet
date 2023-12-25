@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_path = "model_epoch_3.pth"
+    model_path = "model_epoch_14.pth"
     model = load_model(model_path, device)
 
     dataset = BookAnnotationsDataset("book_annotations_test")

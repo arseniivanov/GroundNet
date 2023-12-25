@@ -1,4 +1,7 @@
+from hmac import new
+from re import I
 from torch.utils.data import Dataset, random_split
+from utils import transform_points_to_world, extract_points_from_heatmaps
 
 import os
 import requests
@@ -219,8 +222,100 @@ def run_predictions(model, data_loader, device):
             images, camera_data, plane_normals = images[0].to(device), camera_data[0].to(device), plane_normals[0].to(device)
 
             # Predict
-            predicted_normals = model(images, camera_data)
+            heatmaps = model(images)
 
+            point_predictions = extract_points_from_heatmaps(heatmaps)
+            predicted_normals = transform_points_to_world(point_predictions, camera_data)
+            
             # Compare and print
             print("Real Normals:", plane_normals.cpu().numpy())
             print("Predicted Normals:", predicted_normals.cpu().numpy())
+
+def visualize_frame_annotation(annotation_filename, video_filename, resize = True):
+    new_width, new_height = 320, 240
+
+    # Load video file
+    cap = cv2.VideoCapture(video_filename)
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video file {video_filename}")
+
+    with open(annotation_filename, 'rb') as pb:
+        sequence = Sequence()
+        sequence.ParseFromString(pb.read())
+
+        frame_idx = 0
+        for data in sequence.frame_annotations:
+            ret, frame = cap.read()
+            orignial_width, original_height, _ = frame.shape
+            if not ret:
+                break
+
+            # Resize and convert the frame for visualization
+            if resize:
+                frame = cv2.resize(frame, (new_width, new_height))
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Draw annotations on the frame
+            frame_with_annotations = draw_annotations_on_frame(frame, data, orignial_width, original_height, new_width, new_height, rescale_intrinsics=resize)
+
+            # Display the frame with annotations
+            cv2.imshow('Frame with Annotations', frame_with_annotations)
+            cv2.waitKey(0)  # Press any key to proceed to the next frame
+
+            frame_idx += 1
+
+    cap.release()
+
+def draw_annotations_on_frame(frame, annotation_data, original_width, original_height, new_width, new_height, rescale_intrinsics=True):
+    # Extract the normal vector
+    world_normal = np.array(annotation_data.plane_normal)
+    world_normal = np.array([world_normal[0], -world_normal[1], -world_normal[2]]) # Flip y and z-coord
+    world_normal /= np.linalg.norm(world_normal)  # Normalize to unit length
+
+    # Extract camera extrinsics (rotation and translation)
+    proj = np.array(annotation_data.camera.projection_matrix).reshape(4, 4)
+    image_width, image_height = frame.shape[1], frame.shape[0]
+
+    # Transform normal from world space to camera space
+    # Assuming the normal requires only the rotational part of the transform
+    rotation_matrix = proj[:3, :3]  # Extract rotation part of projection matrix
+    camera_normal = np.dot(rotation_matrix, world_normal)
+
+    if rescale_intrinsics:
+        w = new_width
+        h = new_height
+    else:
+        w = original_width
+        h = original_height
+    # Draw keypoints if available
+    if hasattr(annotation_data.annotations[0], 'keypoints'):
+        for keypoint in annotation_data.annotations[0].keypoints:
+            x, y = keypoint.point_2d.x, keypoint.point_2d.y
+            cv2.circle(frame, (int(x*h), int(y*w)), 5, (0, 255, 0), -1)  # Green point
+
+    #Project and draw center point below
+    plane_center = np.array(annotation_data.plane_center)
+    plane_center = np.array([plane_center[0], -plane_center[1], -plane_center[2]]) #Flip y and z-coord as projection is made in different format
+    plane_c_h = np.append(plane_center, 1)
+
+    # Apply the projection matrix
+    h = np.dot(proj, plane_c_h)
+    h /= h[3]
+
+    # Convert these to pixel coordinates
+    x_pixel = (h[1] + 1) * image_width / 2  # Use y as x
+    y_pixel = (1 - h[0]) * image_height / 2  # use x as y
+
+    cv2.circle(frame, (int(x_pixel), int(y_pixel)), 5, (0,0,255), -1)
+
+    normal_endpoint = plane_center + camera_normal * 0.1  # Scale the normal for visibility
+    normal_endpoint_h = np.append(normal_endpoint, 1)
+    normal_endpoint_image = np.dot(proj, normal_endpoint_h)
+    normal_endpoint_image /= normal_endpoint_image[3]
+    end_x_pixel = (normal_endpoint_image[1] + 1) * image_width / 2
+    end_y_pixel = (1 - normal_endpoint_image[0]) * image_height / 2
+
+    # Draw the line
+    cv2.line(frame, (int(x_pixel), int(y_pixel)), (int(end_x_pixel), int(end_y_pixel)), (255, 0, 0), 2)
+
+    return frame

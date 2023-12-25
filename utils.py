@@ -54,7 +54,6 @@ def extract_points_from_heatmaps(heatmaps):
 
     # Apply softmax to heatmaps
     heatmaps = torch.softmax(heatmaps.view(batch_size, num_points, -1), dim=2).view_as(heatmaps)
-
     # Weighted sum of coordinates (soft-argmax)
     x = torch.sum(heatmaps * x, dim=[2, 3])
     y = torch.sum(heatmaps * y, dim=[2, 3])
