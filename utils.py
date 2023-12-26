@@ -26,9 +26,10 @@ def transform_points_to_world(point_list, camera_data):
         K_inv = torch.inverse(K).to(device)
 
         # Using tensor operations to construct points
-        x_points = point_list[0][i].unsqueeze(-1)  # Shape [3, 1]
-        y_points = point_list[1][i].unsqueeze(-1)  # Shape [3, 1]
+        x_points = point_list[0][i].unsqueeze(-1).to(device)  # Shape [3, 1]
+        y_points = point_list[1][i].unsqueeze(-1).to(device)  # Shape [3, 1]
         ones = torch.ones(3, 1, device=device)
+
         pixel_points = torch.cat((x_points, y_points, ones), dim=1)  # Shape [3, 3]
 
         camera_points = torch.matmul(K_inv, pixel_points).T
