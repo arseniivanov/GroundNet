@@ -285,7 +285,8 @@ def draw_annotations_on_frame(frame, annotation_data):
             cv2.circle(frame, (int(x*image_width), int(y*image_height)), 5, (0, 255, 0), -1)  # Green point
 
     #Project and draw center point below
-    plane_center = np.array(annotation_data.plane_center)
+    #This is incredibely dumb, but plane center is given in camera-space, whilst normal is given in world-space
+    plane_center = np.array(annotation_data.plane_center) 
     plane_center = np.array([plane_center[0], -plane_center[1], -plane_center[2]]) #Flip y and z-coord as projection is made in different format
     plane_c_h = np.append(plane_center, 1)
 
