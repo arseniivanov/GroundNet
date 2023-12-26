@@ -28,9 +28,6 @@ def adjust_and_normalize_intrinsics(intrinsics, original_width, original_height,
 
     return [fx_adj, fy_adj, cx_adj, cy_adj]
 
-# Example usage
-intrinsics = [1596.7095947265625, 0.0, 934.6396484375, 0.0, 1596.7095947265625, 715.7233276367188, 0.0, 0.0, 1.0]
-
 def read_video(filename):
     """
     Read a video file and return its frames as a tensor.
@@ -256,7 +253,7 @@ def visualize_frame_annotation(annotation_filename, video_filename, resize = Tru
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             # Draw annotations on the frame
-            frame_with_annotations = draw_annotations_on_frame(frame, data, orignial_width, original_height, new_width, new_height, rescale_intrinsics=resize)
+            frame_with_annotations = draw_annotations_on_frame(frame, data)
 
             # Display the frame with annotations
             cv2.imshow('Frame with Annotations', frame_with_annotations)
@@ -266,7 +263,7 @@ def visualize_frame_annotation(annotation_filename, video_filename, resize = Tru
 
     cap.release()
 
-def draw_annotations_on_frame(frame, annotation_data, original_width, original_height, new_width, new_height, rescale_intrinsics=True):
+def draw_annotations_on_frame(frame, annotation_data):
     # Extract the normal vector
     world_normal = np.array(annotation_data.plane_normal)
     world_normal = np.array([world_normal[0], -world_normal[1], -world_normal[2]]) # Flip y and z-coord
@@ -281,17 +278,11 @@ def draw_annotations_on_frame(frame, annotation_data, original_width, original_h
     rotation_matrix = proj[:3, :3]  # Extract rotation part of projection matrix
     camera_normal = np.dot(rotation_matrix, world_normal)
 
-    if rescale_intrinsics:
-        w = new_width
-        h = new_height
-    else:
-        w = original_width
-        h = original_height
     # Draw keypoints if available
     if hasattr(annotation_data.annotations[0], 'keypoints'):
         for keypoint in annotation_data.annotations[0].keypoints:
             x, y = keypoint.point_2d.x, keypoint.point_2d.y
-            cv2.circle(frame, (int(x*h), int(y*w)), 5, (0, 255, 0), -1)  # Green point
+            cv2.circle(frame, (int(x*image_width), int(y*image_height)), 5, (0, 255, 0), -1)  # Green point
 
     #Project and draw center point below
     plane_center = np.array(annotation_data.plane_center)
