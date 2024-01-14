@@ -300,7 +300,7 @@ def draw_annotations_on_frame(frame, annotation_data):
 
     cv2.circle(frame, (int(x_pixel), int(y_pixel)), 5, (0,0,255), -1)
 
-    normal_endpoint = plane_center + camera_normal * 0.1  # Scale the normal for visibility
+    normal_endpoint = plane_center + camera_normal * 0.5  # Scale the normal for visibility
     normal_endpoint_h = np.append(normal_endpoint, 1)
     normal_endpoint_image = np.dot(proj, normal_endpoint_h)
     normal_endpoint_image /= normal_endpoint_image[3]
